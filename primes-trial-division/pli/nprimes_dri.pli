@@ -1,0 +1,24 @@
+ NPRIMES:   PROCEDURE OPTIONS (MAIN);
+            %REPLACE
+                N BY 100;
+ /*             N BY 1000; */
+            DECLARE (I, FOUND, COUNT) INT,
+                    PRIMES (N) DECIMAL FIXED (6);
+            FOUND = 0;
+            COUNT = 2;
+            DO WHILE (FOUND < N);
+                FOUND = FOUND + 1;
+                PUT SKIP LIST (COUNT);
+                PRIMES (FOUND) = COUNT;
+ NOTPRIME:      COUNT = COUNT + 1;
+                I = 1;
+ NEXT:          IF (MOD (COUNT, PRIMES (I)) = 0)
+                  THEN GO TO NOTPRIME;
+                ELSE DO
+                  I = I + 1;
+                  IF (I <= FOUND)
+                    THEN GO TO NEXT;
+                  END;
+                END;
+        END NPRIMES;
+

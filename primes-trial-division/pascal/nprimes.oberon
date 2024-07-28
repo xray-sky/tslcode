@@ -1,0 +1,38 @@
+MODULE Benchmark;
+
+IMPORT Out;
+
+CONST NumPrimes = 100;
+(* CONST NumPrimes = 1000; *)
+
+	PROCEDURE nPrimes* (VAR NumPrimes : LONGINT);
+	VAR Count, Index, Found : LONGINT;
+		Primes : ARRAY NumPrimes OF LONGINT;
+	BEGIN
+		
+		Found := 0;
+		Count := 2;
+		
+		WHILE Found < NumPrimes DO
+		
+			Primes[Found] := Count;
+			Out.Int(Count, 6);
+			Out.Ln;
+			INC(Count);
+			INC(Found);
+			
+			Index := 0;
+			REPEAT
+				IF Count MOD Primes[Index] = 0 THEN
+					INC(Count);
+					Index := 0
+				END;
+				INC(Index);
+			UNTIL Index = Found
+		END;
+	
+	END nPrimes;
+
+END Benchmark.
+
+Benchmark.nPrimes

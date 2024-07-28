@@ -1,0 +1,15 @@
+(defun div? (n list / rc)
+  (setq rc nil)
+  (while (&& (! (null list)) (!= rc t))
+      (if (% n (car list)) () ((setq rc t)))
+      (setq list (cdr list)))
+  rc)
+
+(defun primes (n / primes)
+  (setq count 3)
+  (setq primes (list 2))
+  (while (> n (length primes))
+      (if (div? count primes) () ((setq primes (append primes (list count)))))
+      (setq count (+ 1 count)))
+  primes)
+

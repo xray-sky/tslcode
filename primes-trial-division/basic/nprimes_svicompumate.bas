@@ -1,0 +1,10 @@
+10 LetC=3
+20 LetI=2
+30 IfC=IThenGoto80
+40 LetP=C/I
+50 IfP=Int[P]ThenGoto90
+60 LetI=I+1
+70 Goto30
+80 PrtC
+90 LetC=C+1
+99 Goto20

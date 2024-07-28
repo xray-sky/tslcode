@@ -1,0 +1,28 @@
+       INTEGER UNIT, FOUND, COUNT, I, PRIMES(100)
+C      UNIT  = 1
+       UNIT  = 6
+       FOUND = 0
+       COUNT = 2   
+       
+  10   FOUND = FOUND + 1
+       WRITE (UNIT,*) COUNT
+       PRIMES(FOUND) = COUNT
+       COUNT = COUNT + 1
+         
+       I = 1
+       IF (FOUND .LE. 100) THEN
+  20    IF (MOD(COUNT,PRIMES(I)) .EQ. 0) THEN
+         COUNT = COUNT + 1
+         I = 1
+        ELSE
+         IF (I .EQ. FOUND) GO TO 10
+        ENDIF
+        I = I + 1
+        GO TO 20  
+       ELSE
+        GO TO 30
+       ENDIF
+         
+  30   STOP
+       END
+

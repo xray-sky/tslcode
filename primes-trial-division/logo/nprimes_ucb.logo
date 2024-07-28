@@ -1,0 +1,21 @@
+to primes :n
+(local "primes "count "found "i)
+make "primes array :n
+make "count 2
+make "found 0
+label "continue
+catch "notprime [
+  make "i 1
+  repeat :found [ 
+    if (remainder :count item :i :primes) = 0 
+      [ throw "notprime ]
+      [ make "i (1 + :i) ]
+    ]
+  print :count
+  make "found (1 + :found)
+  setitem :found :primes :count
+]
+make "count (1 + :count)
+if :found < :n [ go "continue ]
+end
+

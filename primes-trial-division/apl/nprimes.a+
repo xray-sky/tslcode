@@ -1,0 +1,6 @@
+primes n: {
+ found←1⍴2; count←3;
+ while (n>⍴found) {
+  if (0∈found|count) else found←found,count;
+  count←count+1 };
+ ←found; }

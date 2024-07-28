@@ -1,0 +1,43 @@
+MODULE Benchmark;
+
+IMPORT Commands;
+
+	PROCEDURE nPrimes* (context : Commands.Context);
+	VAR i : LONGINT;
+	BEGIN
+		IF context.arg.GetInteger(i, FALSE) THEN pCalc(i, context) END
+	END nPrimes;
+
+	PROCEDURE pCalc (VAR NumPrimes : LONGINT; context : Commands.Context);
+	VAR Count, Index, Found : LONGINT;
+		Primes : POINTER TO ARRAY OF LONGINT;
+	BEGIN
+		NEW(Primes, NumPrimes);
+		
+		Found := 0;
+		Count := 2;
+		
+		WHILE Found < NumPrimes DO
+		
+			Primes[Found] := Count;
+			context.out.Int(Count, 6);
+			context.out.Ln;
+			INC(Count);
+			INC(Found);
+			
+			Index := 0;
+			REPEAT
+				IF Count MOD Primes[Index] = 0 THEN
+					INC(Count);
+					Index := 0
+				END;
+				INC(Index);
+			UNTIL Index = Found
+		END;
+	
+	END pCalc;
+
+END Benchmark.
+
+Benchmark.nPrimes 10000 ~
+

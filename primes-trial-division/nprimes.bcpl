@@ -1,0 +1,27 @@
+GET "libhdr"
+
+MANIFEST $( N=100 
+            //N=1000
+            //N=10000
+         $)
+
+LET start() BE 
+$( LET i, found, count = ?, 0, 2
+   LET primes = VEC (N-1)
+
+   $( writef("%n*n", count)
+      primes!found := count
+      found := found + 1
+      count := count + 1
+      IF found = N BREAK
+      
+      i := 0
+      $( TEST (count REM primes!i) = 0 
+         THEN $( i := 0
+                 count := count + 1
+              $)
+         ELSE i := i + 1
+      $) REPEATUNTIL (i = found)
+   $) REPEAT
+$)
+

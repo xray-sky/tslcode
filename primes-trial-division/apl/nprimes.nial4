@@ -1,0 +1,11 @@
+isprime IS OPERATION Num List { min (Num mod List) > 0 }
+
+primes IS OPERATION NumPrimes {
+  Found gets 2 ;
+  Cx gets 3 ;
+  REPEAT
+    ((IF isprime Cx Found THEN Found gets append Found Cx ELSE null ENDIF) (Cx gets Cx + 1))
+  UNTIL shape Found = NumPrimes
+  ENDREPEAT ;
+  Found
+}

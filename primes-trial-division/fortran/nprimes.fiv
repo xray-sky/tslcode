@@ -1,0 +1,27 @@
+      INTEGER UNIT, FOUND, COUNT, I, PRIMES(100)
+
+      UNIT  = 4
+      FOUND = 0
+      COUNT = 2
+
+10    FOUND = FOUND + 1
+      WRITE (UNIT,900) COUNT
+900   FORMAT (I6)
+      PRIMES(FOUND) = COUNT
+      COUNT = COUNT + 1
+
+      I = 1
+19    IF (FOUND .LT. 100) GOTO 20
+      GOTO 30
+20      IF (MOD(COUNT,PRIMES(I)) .EQ. 0) GOTO 21
+         GOTO 22
+21        COUNT = COUNT + 1
+          I = 1
+          GOTO 20
+22      IF (I .EQ. FOUND) GOTO 10
+        I = I + 1
+        GOTO 19
+
+30    STOP
+      END
+

@@ -1,0 +1,26 @@
+ NPRIMES:   PROCEDURE (N) OPTIONS (MAIN NOEXECOPS);
+            DECLARE N CHARACTER VARYING;
+            CALL CALCULATE (N);
+ CALCULATE: PROCEDURE (N);
+            DECLARE I DECIMAL FIXED (5),
+                    FOUND DECIMAL FIXED (5),
+                    COUNT DECIMAL FIXED (6),
+                    PRIMES (N) DECIMAL FIXED (6);
+            FOUND = 0;
+            COUNT = 2;
+            DO WHILE (FOUND < N);
+                FOUND = FOUND + 1;
+                PUT SKIP LIST (COUNT);
+                PRIMES (FOUND) = COUNT;
+ NOTPRIME:      COUNT = COUNT + 1;
+                I = 1;
+ NEXT:          IF (MOD (COUNT, PRIMES (I)) = 0)
+                  THEN GO TO NOTPRIME;
+                ELSE DO
+                  I = I + 1;
+                  IF (I <= FOUND)
+                    THEN GO TO NEXT;
+                  END;
+                END;
+            END CALCULATE;
+        END NPRIMES;

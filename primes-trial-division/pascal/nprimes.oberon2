@@ -1,0 +1,44 @@
+MODULE Benchmark;
+
+IMPORT Oberon, Texts, Out;
+
+	PROCEDURE pCalc (VAR NumPrimes : LONGINT);
+	VAR Count, Index, Found : LONGINT;
+		Primes : POINTER TO ARRAY OF LONGINT;
+	BEGIN
+		NEW(Primes, NumPrimes);
+		
+		Found := 0;
+		Count := 2;
+		
+		WHILE Found < NumPrimes DO
+		
+			Primes[Found] := Count;
+			Out.Int(Count, 6);
+			Out.Ln;
+			INC(Count);
+			INC(Found);
+			
+			Index := 0;
+			REPEAT
+				IF Count MOD Primes[Index] = 0 THEN
+					INC(Count);
+					Index := 0
+				END;
+				INC(Index);
+			UNTIL Index = Found
+		END;
+	
+	END pCalc;
+
+	PROCEDURE nPrimes*;
+	VAR Arg : Texts.Scanner;
+	BEGIN
+		Texts.OpenScanner(Arg, Oberon.Par.text, Oberon.Par.pos);
+		Texts.Scan(Arg);
+		pCalc(Arg.i)
+	END nPrimes;
+
+END Benchmark.
+
+Benchmark.nPrimes 10000 ~

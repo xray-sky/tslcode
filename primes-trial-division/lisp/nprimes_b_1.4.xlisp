@@ -1,0 +1,17 @@
+(setq T t)
+
+(defun divp (n list)
+  (prog () (mapc #'(lambda (p)
+              (cond ((zerop (rem n p)) (return T)))) list)
+    (return nil)))
+
+(defun primes (n)
+  (prog (count primes)
+    (setq count 3)
+    (setq primes (list 2))
+    NEXT (cond ((< (length primes) n)
+                (cond ((divp count primes) nil)
+                      (T (nconc primes (list count)))))
+               (T (return primes)))
+    (setq count (+ 1 count))
+    (go NEXT)))

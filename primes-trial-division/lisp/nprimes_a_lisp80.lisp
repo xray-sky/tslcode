@@ -1,0 +1,11 @@
+DEFINE (((PRIMES (LAMBDA (N)
+        (PROG (COUNT PRIMES)
+            (SETQ COUNT 3)
+            (SETQ PRIMES (LIST 2))
+       NEXT (COND ((LESSP (LENGTH PRIMES) N)
+                  (COND ((MEMBER 0 (MAPCAR PRIMES '(LAMBDA (X) (REMAINDER COUNT X)))) NIL)
+                        (T (NCONC PRIMES (LIST COUNT)))))
+            (T (RETURN PRIMES)))
+        (SETQ COUNT (PLUS COUNT 1))
+        (GO NEXT))))))
+

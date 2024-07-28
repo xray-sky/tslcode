@@ -1,0 +1,32 @@
+BEGIN
+COMMENT First n Primes;
+
+INTEGER FUNCTION REMAINDER(X, Y);
+  INTEGER X, Y;
+  BEGIN
+    REMAINDER := X - (Y * (X / Y));
+  END;
+  
+PROCEDURE PRIMES(N);
+  INTEGER N, I, COUNT, FOUND; 
+  INTEGER ARRAY PRIMES[1:N];
+  BEGIN
+    COUNT := 2; FOUND := 0;
+    WHILE FOUND < N DO
+      BEGIN
+        WRITE(COUNT);
+        PRIMES[FOUND] := COUNT;
+        FOUND := FOUND + 1;
+NOTP:   COUNT := COUNT + 1;
+        FOR I := 0 STEP 1 UNTIL FOUND DO
+          BEGIN
+            IF REMAINDER(COUNT, PRIMES[I]) = 0 THEN I := FOUND + 1;
+          END;
+        IF I > FOUND + 1 THEN GOTO NOTP;
+      END;
+  END;
+
+PRIMES(100);
+COMMENT PRIMES(1000);
+END
+
