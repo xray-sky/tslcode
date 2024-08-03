@@ -1,0 +1,42 @@
+#! /bin/sh
+# ------------------------
+# add LDAP user account to group
+#
+# 20160129 bear - version 1.0
+#
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SCRIPTNAME=$(basename $0)
+SCRIPTPATH=$(dirname $0)
+
+if [ -z "$2" ] ; then
+	echo Usage: $SCRIPTNAME groupname username [ username ... ]
+	exit 1
+fi
+
+case $SCRIPTNAME in
+	"joingroup")	action="add"	; test="||"	;;
+	"dropgroup")	action="delete"	; test="&&"	;;
+esac
+
+. $SCRIPTPATH/ldap-util.shlib
+
+gid=$1
+shift
+
+ldap_obj_exists cn=$gid $LDAP_GROUP_OU || exit 1
+
+ldap_modify_connect cn=$gid $LDAP_GROUP_OU
+
+echo "$action: memberUid"
+until [ -z "$1" ] ; do
+	eval ldap_attr_exists cn=$gid $LDAP_GROUP_OU memberUid $1 $test echo "memberUid: $1"
+	shift
+done
+
+echo
+ldap_disconnect
+
+echo $SCRIPTNAME: $gid revised member list -
+ldapsearch -LLL $LDAP_BASEOPTS -b $LDAP_GROUP_OU cn=$gid | sort -k2 | awk '/memberUid:/ { print $2 }'
+echo

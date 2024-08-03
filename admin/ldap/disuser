@@ -1,0 +1,38 @@
+#! /bin/sh
+# ------------------------
+# permanent administrative lockout of LDAP user account 
+#
+# 20160129 bear - version 1.0
+#
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SCRIPTNAME=$(basename $0)
+SCRIPTPATH=$(dirname $0)
+
+if [ -z "$1" ] ; then
+	echo Usage: $SCRIPTNAME username
+	exit 1
+fi
+
+. $SCRIPTPATH/ldap-util.shlib
+
+uid=$1
+ldap_obj_exists uid=$uid $LDAP_USER_OU || exit 1
+
+new_pw=$(slappasswd -g)
+crypt_pw=$(slappasswd -s $new_pw)
+
+# we don't care what the new password is, nobody should use the account
+#echo $SCRIPTNAME: new password for user $uid will be $new_pw
+
+ldap_modify_connect uid=$uid $LDAP_USER_OU
+ldap_set userPassword $crypt_pw ; echo -
+ldap_set pwdPolicySubentry $LDAP_POLICY_DISUSER ; echo -
+ldap_set pwdAccountLockedTime $LDAP_LOCKTIME_PERM ; echo
+ldap_disconnect
+
+echo $SCRIPTNAME: removing $uid from all supplementary groups...
+
+for grp in $(ldapsearch -LLL $LDAP_BASEOPTS -b $LDAP_GROUP_OU memberUid=$uid cn | awk '/cn: / { print $2 }') ; do
+	$SCRIPTPATH/dropgroup $grp $uid
+done

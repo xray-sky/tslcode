@@ -1,0 +1,311 @@
+# dns.shlib
+# ====================
+# shared library routines for dns maintenance activities
+# 20160311 bear v1.0 - initial release
+#
+
+DNSLIB_DIG_GLOBAL_OPTS="+nocomments +nostats +noquestion +nocmd"
+DNSLIB_DIG_CMD="dig $DNSLIB_DIG_GLOBAL_OPTS -q"
+DNSLIB_CHOP_CMD='sed -e s/\.$//'
+
+NSUPDATE_FIFO="/tmp/$$.p"
+
+# allow these be overridden if necessary ; separate multiple server names with whitespace
+[ -z "$DNSLIB_TSIG_NSUPDATE_KEY_FILE" ] && DNSLIB_TSIG_NSUPDATE_KEY_FILE="/etc/bind/nsupdate.key"
+[ -z "$DNSLIB_TSIG_NSUPDATE_SERVERS" ]  && DNSLIB_TSIG_NSUPDATE_SERVERS="nsmaster.wherever.com"
+
+trap cleanup INT HUP KILL EXIT
+
+cleanup() {
+        [ -p $NSUPDATE_FIFO ] && rm $NSUPDATE_FIFO
+}
+
+die() {
+	echo $SCRIPTNAME: "$2" >&2
+	exit "$1"
+}
+
+# nsupdate_connect(authority)
+# ========================================================================
+# connect to nsupdate on a named pipe for the purposes of doing
+# one or more updates to a zone authority
+#
+
+nsupdate_connect() {
+
+	mkfifo -m 600 $NSUPDATE_FIFO
+	nsupdate -k $DNSLIB_TSIG_NSUPDATE_KEY_FILE <$NSUPDATE_FIFO &
+	exec 3<&1 >$NSUPDATE_FIFO
+	#exec 3<&1 >/tmp/znsupdate_debug
+
+	_authority=$1
+
+	cat <<-EONSUPDATE
+	server $_authority
+	EONSUPDATE
+}
+
+nsupdate_disconnect() {
+	exec >&- 1<&3 3>&-
+	sleep 1
+}
+
+# dnslib_ip_to_ptr(ip_address)
+# ========================================================================
+# given an IP address, prints a properly formatted PTR
+#
+#  . will work with v4 or v6 addresses
+#  . v6 addresses may be zero-compressed
+#  . prints ip_address unmodified if it appears to already be a PTR
+#  . if it doesn't look a little like an IP address, print nothing.
+#    otherwise:
+#  . garbage in garbage out
+#
+
+dnslib_ip_to_ptr() {
+	_req=$(echo "$1" | $DNSLIB_CHOP_CMD)
+
+	case "$_req" in
+	*.arpa)
+		echo "$_req"
+		;;
+	*.*.*.*)
+		echo "$_req" \
+		| awk -F. '{ OFS="." ; print $4,$3,$2,$1,"in-addr.arpa." }'
+		;;
+	*:*)
+		echo "$(dnslib_expand_ip6 "$_req" \
+		      | tr -d ':' \
+		      | rev \
+		      | sed -e 's/./&./g')ip6.arpa"
+		;;
+	esac
+}
+
+# dnslib_ptr_to_ip(ptr_rec)
+# ========================================================================
+# given an PTR record, prints a properly formatted IP address
+#
+#  . will work with v4 or v6 addresses
+#  . v6 addresses may be zero-compressed
+#  . prints ptr_rec unmodified if it validates as an IP address already
+#  . if it doesn't look like a little like a PTR record and doesn't
+#    validate as an IP address, print nothing. otherwise:
+#  . garbage in garbage out
+#
+
+dnslib_ptr_to_ip() {
+	_ip="$1"
+	case "$_ip" in
+	*.in-addr.arpa)	echo "$_ip" \
+			| awk -F'.' '{ OFS="." ; print $4,$3,$2,$1 }'
+			;;
+	*.ip6.arpa)	echo "$_ip" \
+			| sed -e 's/\.ip6\.arpa$//' -e 's/\.//g' \
+			| rev \
+			| sed -e 's/..../&:/g' -e 's/:$//'
+			;;
+	*)		dnslib_validate_ip "$_ip" && echo $_ip ;;
+	esac
+}
+
+# dnslib_validate_ip(ip_address)
+# ========================================================================
+# check a given IP address is valid
+#
+#  . return 0 if it checks out
+#  . return 1 if it doesn't
+#
+
+dnslib_validate_ip() {
+	_ip="$1"
+
+	case "$_ip" in
+	[0-9]*.[0-9]*.[0-9]*.[0-9]*) 	# not perfect, but should do in practice
+		OFS=$IFS ; IFS='.'
+		set -- $_ip
+		IFS=$OFS
+		[ $4 -gt 255 -o $3 -gt 255 -o $2 -gt 255 -o $1 -gt 255 ] && return 1
+		return 0
+		;;
+	*:*)
+		_ip=$(dnslib_expand_ip6 "$_ip")
+		_nfs=$(echo "$_ip" | tr -Cd ':' | wc -c)
+		_valid=$(echo "$_ip" | tr -Cd ':[0-9A-Fa-f]' | wc -c)
+
+		[ "$_valid" -ne 39 -o "$_nfs" -ne 7 ] && return 1
+		return 0
+		;;
+	esac
+	return 1
+}
+
+# dnslib_validate_authority(domain)
+# ========================================================================
+# check the SOA of a domain against the list of our SOAs
+#
+#  . return 0 if it matches one ("is ours")
+#  . return 1 if it does not ("is someone else's")
+#
+
+dnslib_validate_authority() {
+	_soa=$(dnslib_get_rec "$1" SOA)
+
+	set -- $DNSLIB_TSIG_NSUPDATE_SERVERS
+	while [ -n "$1" ] ; do
+		[ "$_soa" = "$1" ] && return 0
+		shift
+	done
+	return 1
+}
+
+# dnslib_validate_name(rec_name)
+# ========================================================================
+# check a given record name is valid
+#
+#  . return 0 if it checks out
+#  . return 1 if it doesn't
+#  . return 2 if the SOA is not one of ours
+#
+
+dnslib_validate_name() {
+	_name="$1"
+
+	case "$_name" in
+	*.in-addr.arpa)
+		dnslib_validate_ip $(dnslib_ptr_to_ip "$_name") || return 1
+		OFS=$IFS ; IFS='.'
+		set -- $_name
+		shift
+		_domain=$*
+		IFS=$OFS
+		;;
+	*.ip6.arpa)
+		dnslib_validate_ip $(dnslib_ptr_to_ip "$_name") || return 1
+		OFS=$IFS ; IFS='.'
+		set -- $_name
+		shift 16
+		_domain=$*
+		IFS=$OFS
+		;;
+	*)
+		[ -z "$(echo $_name | tr -d '[0-9A-Za-z.\-]')" ] || return 1
+		OFS=$IFS ; IFS='.'
+		set -- $_name
+		_host=$1 ; shift
+		_domain=$*
+		IFS=$OFS
+
+		[ -z "$_host" -o -z "$_domain" ] && return 1
+		;;
+	esac
+
+	dnslib_validate_authority "$_domain" || return 2
+	return 0
+
+}
+
+# dnslib_expand_ip6(ip6_address)
+# ========================================================================
+# un-zero-compress the supplied IPv6 address
+#
+#  . all 32 bytes explicitly printed, with colons
+#  . smashed lowercase
+#  . can only cope with a single zero-compressed section
+#    (is it even valid to have more than one?)
+#
+
+dnslib_expand_ip6() {
+	_addr="$1"
+
+	# a full v6 addr should have 8 parts
+	# find out how many we were given & fill shortened section
+	_parts=$(echo "$_addr" | awk -F':' '{ print NF }')
+	while [ $_parts -lt 8 ] ; do
+		_addr=$(echo "$_addr" | sed -e 's/::/:::/')
+		_parts=$(expr $_parts + 1)
+	done
+
+	echo "$_addr" \
+	| awk -F':' '{ for (i=1; i<=NF; i++) printf("%4s%s", tolower($i), i==NF?"\n":FS); }' \
+	| tr ' ' 0
+}
+
+# dnslib_get_tsig_key()
+# ========================================================================
+# read the file named in the environment and print extracted TSIG secret
+#
+#  . file is named.conf format
+#  . prints nothing if no key found
+#
+
+dnslib_get_tsig_key() {
+	awk -F\" '/secret/ { print $2 }' "$DNSLIB_TSIG_NSUPDATE_KEY_FILE" 2>/dev/null
+}
+
+# dnslib_get_rec(name,record_type)
+# ========================================================================
+# print the answer(s) for the named query
+#
+#  . if record_type is blank, will return all "normal" answers, including
+#    a CNAME's corresponding A record(s), any NS records, etc.
+#  . one answer per line; first field is record type if record_type was blank
+#  . converts IP address (v4 or v6) to PTR format before executing query
+#  . if the record_type is SOA, will find the authority for any record
+#  . keep in mind you may get more than one answer from any query!
+#    (especially if somebody's been pounding on nsupdate like a wild monkey)
+#
+
+dnslib_get_rec() {
+	_query="$1"
+	_rectype="$2"
+
+	# NOTE: to get a legit answer for a PTR query, your query MUST be PTR format
+	#                 AND explicitly request PTR type from dig!
+
+	if [ -z "$_rectype" ] ; then
+		case "$_query" in
+		*:*)		rectype="PTR";;
+		*.arpa)		rectype="PTR";;
+		*.*.*.*)	dnslib_validate_ip "$_query" && rectype="PTR";;
+		esac
+	fi
+
+	case "$_rectype" in
+	"")
+		# any records, possibly including NS and/or SOA
+		$DNSLIB_DIG_CMD "$_query" \
+		| awk '{ OFS="\t" ; print $4,$5 }' \
+		| $DNSLIB_CHOP_CMD
+		;;
+	PTR)
+		$DNSLIB_DIG_CMD $(dnslib_ip_to_ptr "$_query") PTR \
+		| egrep "IN\s+$_rectype" \
+		| awk '{ print $5 }' \
+		| $DNSLIB_CHOP_CMD
+		;;
+	*)
+		# don't forget one name may legitimately return multiple records
+		$DNSLIB_DIG_CMD "$_query" $_rectype \
+		| egrep "IN\s+$_rectype" \
+		| awk '{ print $5 }' \
+		| $DNSLIB_CHOP_CMD
+		;;
+	esac
+}
+
+# dnslib_get_zone(zone)
+# ========================================================================
+# print the parent zone of the named record
+#
+#  . this, at least, is relatively foolproof
+#
+
+dnslib_get_zone() {
+	_query="$1"
+
+	$DNSLIB_DIG_CMD "$_query" SOA \
+	| egrep "IN\s+SOA" \
+	| awk '{ print $1 }' \
+	| $DNSLIB_CHOP_CMD
+}

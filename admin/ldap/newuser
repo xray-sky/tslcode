@@ -1,0 +1,74 @@
+#! /bin/sh
+# ------------------------
+# create new LDAP user account 
+#
+# 20160131 bear - version 1.0
+#
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SCRIPTNAME=$(basename $0)
+SCRIPTPATH=$(dirname $0)
+
+unset uid
+
+. $SCRIPTPATH/ldap-util.shlib
+
+xcleanup() {
+	[ -p /tmp/$$.i ] && rm /tmp/$$.i
+	[ -p /tmp/$$.o ] && rm /tmp/$$.o
+	cleanup
+}
+
+trap xcleanup INT HUP KILL EXIT
+
+[ -z "$3" ] && die 1 "username 'Full Name' email@address"
+
+usr=$1
+gecos=$2
+eml=$3
+
+echo $SCRIPTNAME: checking LDAP for uid=$usr...
+ldap_obj_exists uid=$usr $LDAP_USER_OU  && die 1 "account $usr already exists in LDAP"
+echo
+
+#gid=$(ldapsearch $LDAP_BASEOPTS -b $LDAP_GROUP_OU cn=$grp gidNumber | awk '/gidNumber:/ { print $2 }')
+#[ -z "$gid" ] && die 1 "no gidNumber for group $grp in LDAP"
+#
+# have a search for the lowest unused UID
+
+mkfifo -m 600 /tmp/$$.i /tmp/$$.o
+sort -n /tmp/$$.i | uniq -u | head -1 >/tmp/$$.o &
+exec 3<&1 >/tmp/$$.i 
+
+n=$LDAP_UID_SEARCH_MIN
+while [ $n -le $LDAP_UID_SEARCH_MAX ] ; do
+	echo $n
+	n=$(expr $n + 1)
+done
+ldapsearch -LLL $LDAP_BASEOPTS -b $LDAP_USER_OU uid=\* uidNumber | awk '/uidNumber:/ { print $2 }'
+exec >&- 1<&3 3>&-
+read uid </tmp/$$.o
+
+# belt and suspenders; don't remove this check as there are some uids in the DIT waiting to break the algorithm
+ldap_attr_exists uid=\* $LDAP_USER_OU uidNumber $uid && die 1 "fatal error searching for available uidNumber"
+
+new_pw=$(slappasswd -g)
+crypt_pw=$(slappasswd -s $new_pw)
+
+echo $SCRIPTNAME: new password for user $usr will be $new_pw
+
+ldapadd $LDAP_BASEOPTS <<EOLDIF
+dn: uid=$usr,$LDAP_USER_OU 
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: $usr
+sn: $usr
+uid: $usr
+uidNumber: $uid
+gidNumber: 10001
+homeDirectory: /home/$usr
+loginShell: /bin/bash
+gecos: $gecos
+mail: $eml
+userPassword: $crypt_pw
+EOLDIF

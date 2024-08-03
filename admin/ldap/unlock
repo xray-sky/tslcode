@@ -1,0 +1,43 @@
+#! /bin/sh
+# ------------------------
+# clear administrative lock on LDAP user account
+#
+# 20160129 bear - version 1.0
+#
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SCRIPTNAME=$(basename $0)
+SCRIPTPATH=$(dirname $0)
+
+if [ -z "$1" ] ; then
+	echo Usage: $SCRIPTNAME username
+	exit 1
+fi
+
+. $SCRIPTPATH/ldap-util.shlib
+
+uid=$1
+ldap_obj_exists uid=$uid $LDAP_USER_OU || exit 1
+locktime=$(ldapsearch $LDAP_BASEOPTS -b $LDAP_USER_OU uid=$uid + | awk '/pwdAccountLockedTime/ { print $2 }')
+
+case "$locktime" in
+"")
+	#not locked
+	die 1 "account $uid is not locked."
+	;;
+
+$LDAP_LOCKTIME_PERM)
+	#administratively locked / disusered
+	# undocumented option -- don't be doing this
+	if [ "$2" != "resurrect" ] ; then die 255 "account $uid is permanently locked." ; fi
+	# fall through
+	;;
+esac
+
+#will unlock
+echo $SCRIPTNAME: account $uid locked since $locktime
+ldapmodify $LDAP_BASEOPTS <<-EOLDIF
+	dn: uid=$uid,$LDAP_USER_OU
+	changetype: modify
+	delete: pwdAccountLockedTime
+EOLDIF

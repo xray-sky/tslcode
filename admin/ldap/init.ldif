@@ -1,0 +1,12 @@
+dn: cn=module{0},cn=config
+objectClass: olcModuleList
+cn: module{0}
+olcModulePath: /usr/lib/ldap
+olcModuleLoad: {0}back_hdb
+olcModuleLoad: {1}syncprov
+olcModuleLoad: {2}accesslog
+olcModuleLoad: {3}ppolicy
+
+dn: olcBackend={0}hdb,cn=config
+objectClass: olcBackendConfig
+olcBackend: {0}hdb

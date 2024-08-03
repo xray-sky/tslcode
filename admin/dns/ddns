@@ -1,0 +1,279 @@
+#! /bin/sh
+# ====================
+# ddns tool
+# wrapper for nsupdate
+# 20160319 bear v1.0 - initial release
+#
+#
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+SCRIPTNAME=$(basename $0)
+SCRIPTPATH=$(dirname $0)
+
+UPDATE_AUDITFILE="/var/lib/bind/$SCRIPTNAME.audit"
+
+# TODO :: ought the record TTL be optionally user-specifiable?
+TTL=900
+
+usage() {
+	echo "Usage: $SCRIPTNAME addnode fqdn ip < noptr >"
+	echo "       $SCRIPTNAME delnode fqdn"
+	echo
+	echo "       $SCRIPTNAME addcname alias fqdn < noexist >"
+	echo "       $SCRIPTNAME delcname alias"
+	echo
+	echo "       $SCRIPTNAME raw raw_nsupdate_cmd..."
+	echo
+	exit 255
+}
+
+# audit(update_action)
+# =========================================================
+# use this routine when connected to nsupdate to generate
+# audit log of dns change actions
+
+audit() {
+	echo "$1"
+	echo "send"
+	echo "$(date '+%Y%m%d %T') [$SUDO_USER] $1" >> $UPDATE_AUDITFILE
+}
+
+[ -z "$1" ] && usage
+argc=$*
+cmd=$1 ; shift ; args=$*
+
+. $SCRIPTPATH/dns.shlib
+
+case "$cmd" in
+	addnode)
+		set -- $args
+		host="$1"   ; shift
+		ip="$1"     ; shift
+
+	# I am aware that this doesn't allow one to specify both override AND noptr
+	# on the basis that this is double-jeopardy, don't go out of our way to allow it.
+	# let it go through the 'raw' nsupdate if it absolutely must be done
+
+		override="$1"
+
+		[ -z "$host" -o -z "$ip" ] && usage
+
+		dnslib_validate_ip "$ip" || die 1 "invalid IP address $ip"
+
+		case $ip in
+			*.*.*.*) arectype="A"    ;;
+			*:*)     arectype="AAAA" ;;
+			*)       die 255 "bang!" ;;	# oughtn't ever happen
+		esac
+
+		ptr=$(dnslib_ip_to_ptr $ip)
+
+	# are we about to make a mess with regard to what's already present in DNS?
+		exists=0
+		for r in "$host $arectype" "$host CNAME" "$ptr PTR" ; do
+			a=$(dnslib_get_rec $r)
+			if [ -n "$a" ] ; then
+				exec >&2
+				echo "  =>  record exists: $r $a"
+				[ "$r" = "$ptr PTR" -a "$override" = "noptr" ] || exists=1
+			fi
+		done
+		[ $exists -eq 0 ] || die 3 "aborting."
+
+	# user input sanity check
+		for n in $host $ptr ; do
+			dnslib_validate_name $n
+			rc=$?
+			case $rc in
+				0) true ;;
+				1) die 1 "invalid name $n" ;;
+				2) [ "$override" = "noptr" -a $(echo $n | egrep '\.arpa$') ] \
+				       || die 2 "we don't have authority over $n" ;;
+				*) die 255 "unknown return from dnslib_validate_name($n): $rc" ;;
+			esac
+		done
+
+		zone=$(dnslib_get_zone $host)
+		domain=$(echo $host | awk -F'.' '{ sub($1 FS, "") ; print }')
+
+		if [ "$domain" != "$zone" -a "$override" != "override" ] ; then
+			exec >&2
+			echo "   =>  The A record for $host would be created in the $zone zone!  <="
+			echo
+			echo "If you are ABSOLUTELY CERTAIN that this is what you want, try again with"
+			echo "$SCRIPTNAME $argc override"
+			echo
+			die 3 "aborting."
+		fi
+
+	# seems sane
+		nsupdate_connect $(dnslib_get_rec $zone SOA)
+
+		audit "update add $host $TTL $arectype $ip"
+		[ "$override" != "noptr" ] && audit "update add $ptr $TTL PTR ${host}."
+
+		nsupdate_disconnect
+		exit 0
+
+		;; # =====================================================================[ addnode ]===
+
+
+
+	delnode)
+		set -- $args
+		host="$1" ; shift
+		override="$1"
+
+		[ -z "$host" ] && usage
+
+	# user input sanity check
+		dnslib_validate_name $host
+		rc=$?
+		case $rc in
+			0) true ;;
+			1) die 1 "invalid name $host" ;;
+			2) die 2 "we don't have authority over $host" ;;
+			*) die 255 "unknown return from dnslib_validate_name($host): $rc" ;;
+		esac
+
+	# it is a valid name that we have authority over; 
+	# delete whatever A, AAAA records there are
+		nsupdate_connected=0
+
+		zone=$(dnslib_get_zone $host)
+		for arectype in A AAAA ; do
+			addr=$(dnslib_get_rec $host $arectype)
+			if [ -n "$addr" ] ; then
+				if [ $nsupdate_connected -eq 0 ] ; then
+					nsupdate_connect $(dnslib_get_rec $zone SOA)
+					nsupdate_connected=1
+				fi
+				audit "update delete $host $arectype $addr"
+
+				# delete the associated PTR (if any)
+				if [ -n "$(dnslib_get_rec $addr PTR)" ] ; then
+					ptr=$(dnslib_ip_to_ptr $addr)
+					audit "update delete $ptr PTR $host"
+				fi
+			fi
+		done
+
+		[ $nsupdate_connected -eq 0 ] && die 0 "No action. No A or AAAA records found for $host"
+
+		nsupdate_disconnect
+		exit 0
+
+		;; # =====================================================================[ delnode ]===
+
+
+
+	addcname)
+		set -- $args
+		name="$1"    ; shift
+		cname="$1"   ; shift
+		override="$1"
+
+	# I am aware that this doesn't allow one to specify both override AND noexist
+	# on the basis that this is double-jeopardy, don't go out of our way to allow it.
+	# let it go through the 'raw' nsupdate if it absolutely must be done
+
+		[ -z "$name" -o -z "$cname" ] && usage
+
+	# user input sanity check
+		dnslib_validate_name $name
+		rc=$?
+		case $rc in
+			0) true ;;
+			1) die 1 "invalid name $name" ;;
+			2) die 2 "we don't have authority over $name" ;;
+			*) die 255 "unknown return from dnslib_validate_name($name): $rc" ;;
+		esac
+
+		dnslib_validate_name $cname
+		rc=$?
+		case $rc in
+			0) true ;;
+			2) true ;;
+			1) die 1 "invalid name $cname" ;;
+			*) die 255 "unknown return from dnslib_validate_name($cname): $rc" ;;
+		esac
+
+	# zone check
+		zone=$(dnslib_get_zone $name)
+		domain=$(echo $name | awk -F'.' '{ sub($1 FS, "") ; print }')
+
+		if [ "$domain" != "$zone" -a "$override" != "override" ] ; then
+			exec >&2
+			echo "   =>  The CNAME record for $name would be created in the $zone zone!  <="
+			echo
+			echo "If you are ABSOLUTELY CERTAIN that this is what you want, try again with"
+			echo "$SCRIPTNAME $argc override"
+			echo
+			die 3 "aborting."
+		fi
+
+	# existence check
+		if [ "$override" != "noexist" -a -z "$(dnslib_get_rec $cname A)" -a -z "$(dnslib_get_rec $cname AAAA)" ] ; then
+			exec >&2
+			echo "   =>  The CNAME for $name would point to a non-existent record!  <="
+			echo 
+			echo "If you are ABSOLUTELY CERTAIN that this is what you want, try again with"
+			echo "$SCRIPTNAME $argc noexist"
+			echo
+			die 3 "aborting."
+		fi
+
+	# looks okay
+		nsupdate_connect $(dnslib_get_rec $zone SOA)
+		audit "update add $name $TTL CNAME $cname"
+
+		nsupdate_disconnect
+		exit 0
+
+		;; # ====================================================================[ addcname ]===
+
+
+
+	delcname)
+		set -- $args
+		name="$1" ; shift
+		override="$1"
+
+		[ -z "$name" ] && usage
+
+	# user input sanity check
+		dnslib_validate_name $name
+		rc=$?
+		case $rc in
+			0) true ;;
+			1) die 1 "invalid name $name" ;;
+			2) die 2 "we don't have authority over $name" ;;
+			*) die 255 "unknown return from dnslib_validate_name($name): $rc" ;;
+		esac
+
+	# it is a valid name that we have authority over
+		zone=$(dnslib_get_zone $name)
+		cname=$(dnslib_get_rec $name CNAME)
+		if [ -n "$cname" ] ; then
+			nsupdate_connect $(dnslib_get_rec $zone SOA) 
+			audit "update delete $name CNAME $cname"
+			nsupdate_disconnect
+		else
+			die 0 "No action. No CNAME records found for $name"
+		fi
+
+		exit 0
+		;; # ====================================================================[ delcname ]===
+
+
+	raw)
+		set -- $args
+		die 0 "raw nsupdate currently unimplemented"
+		;; # =========================================================================[ raw ]===
+
+
+	*)
+		usage
+		;;
+esac
+
