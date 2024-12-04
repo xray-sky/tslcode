@@ -7,8 +7,6 @@
  *
  * $Id: dmkmap.c 41 2023-03-26 23:48:14Z bear $
  *
- * Copyright 2023 r.stricklin.
- *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.  Note that permission is
