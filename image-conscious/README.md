@@ -16,9 +16,13 @@ hacked up source from the `libdmk` project
 
 rough prototype framework for an overly ambitious project to manipulate assorted kinds of archive media formats
 
+## rbakprepfd.rb
+
+filters Apollo floppy disk images to allow them to be indexed/extracted by Jim Rees' rbak for UNIX/Linux
+
 ## simh2sdhawk.rb
 
-converts `simh` format tape image files to Strobe Data Hawk `filetape` format
+converts `simh` format tape image files to Strobe Data _Hawk_ `filetape` format
 
 ## tap2aws.rb
 
@@ -26,13 +30,15 @@ converts tape image files in Eric Smith's `tapedump` format to IBM P/390 `AWSTAP
 
 ## tapeimage.sh
 
-automates dumping physical tape files to disk, optionally preserving block and/or label metadata. primarily for use with Solaris 2.x
+automates dumping physical tape files to disk, optionally preserving block and/or label metadata. 
+primarily for use with Solaris 2.x
 
 variable-record-length tapes dumped with this tool may be re-created with `bdd.pl`.
 
 ## uncptape.rb
 
-extracts individual tape files from US Army AI Center `copytape` format tape image container files
+extracts individual tape files from US Army AI Center `copytape` format tape image container files.
+
 tape blocking is not preserved.
 
 ## unod.rb

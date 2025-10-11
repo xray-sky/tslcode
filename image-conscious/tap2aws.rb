@@ -5,17 +5,17 @@
 #
 
 
-tap = File.open(ARGV[0])
 if File.exist?(ARGV[1])
   warn "#{ARGV[1]} exists"
   exit 1
-else
-  aws = File.open(ARGV[1], File::CREAT|File::TRUNC|File::WRONLY)
 end
 
 AWStapmark = 0x40
 AWSrecmark = 0xa0
 lastblksz  = 0
+
+aws = File.open(ARGV[1], File::CREAT|File::TRUNC|File::WRONLY)
+tap = File.open(ARGV[0])
 
 while tap do
   blksz = tap.read(4).unpack('L<')[0]
