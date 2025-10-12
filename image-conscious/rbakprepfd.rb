@@ -15,7 +15,6 @@
 flp = ''
 dkimg = File.open(ARGV[0])
 fileno = ARGV[1].to_i
-fileno ||= 0
 
 def read_track(fh)
   (a,e,b,f,c,g,d,h) = (0..7).map { |t| fh.read(1024) }
@@ -42,10 +41,12 @@ dkimg.close
 #             - 2: rbak file record (full sector, (1024 - 6*2) bytes = 1012 bytes)
 #             - 3: rbak file record (less than sector, lead-out)
 #             - 4: end of "tape" file
+#             - 6: pad
+#                   . fills to end of sector if insufficient space for subsequent record
+#                   . not followed by record length field
+#                   . unsure if always appears in pairs (i.e. mark repeats at end of record)
 #        * long (four bytes, BE) : record length
 #     + record mark repeats at end of record (in opposite order)
-#     + 4 byte special "pad" record (0x00060006), 
-#         * fills to end of sector if insufficient space for other record
 #
 #  - Each rbak file is preceeded by at least one ANSI label record, followed
 #    by a type 4 (EOF) marker
@@ -64,22 +65,19 @@ tpfile = 0
 offset = 1024 # skip sector 1, the floppy volume label
 
 while (offset < flp.length) do
-  if (flp[offset..(offset+3)].unpack('N').first == 393222)
-    #warn "RUNT"
-    offset += 4
+  seq = flp[offset..offset+1].unpack('n').first
+  (offset += 2 ; next) if seq == 6 # RUNT
+
+  len = flp[(offset+2)..(offset+5)].unpack('N').first
+  #warn "flpsz #{flp.length} seq #{seq} len #{len} offset #{offset} remain #{flp.length-offset}"
+  case seq
+  when 4 then tpfile += 1  # EOF
+  when 0
+    label = flp[(offset+6)..(offset+len+5)]
+    break if label.start_with?('EOV')
+    warn "label (#{tpfile/3}): #{label}" unless label.start_with?('EOF')
   else
-    seq = flp[offset..offset+1].unpack('n').first
-    len = flp[(offset+2)..(offset+5)].unpack('N').first
-    #warn "flpsz #{flp.length} seq #{seq} len #{len} offset #{offset} remain #{flp.length-offset}"
-    case seq
-    when 4 then tpfile += 1  # EOF
-    when 0 
-      label = flp[(offset+6)..(offset+len+5)]
-      break if label.start_with?('EOV')
-      warn "label: #{label}" unless label.start_with?('EOF')
-    else
-      print flp[(offset+6)..(offset+len+5)] if (tpfile / 3 == fileno)
-    end
-    offset += 12 + len
+    print flp[(offset+6)..(offset+len+5)] if ((tpfile / 3) == fileno)
   end
+  offset += 12 + len
 end
