@@ -16,6 +16,10 @@ hacked up source from the `libdmk` project
 
 rough prototype framework for an overly ambitious project to manipulate assorted kinds of archive media formats
 
+## oldar.rb
+
+extract contents of V6 or V7 UNIX archive library (ar) files not supported by "modern" ar
+
 ## rbakprepfd.rb
 
 filters Apollo floppy disk images to allow them to be indexed/extracted by Jim Rees' rbak for UNIX/Linux
