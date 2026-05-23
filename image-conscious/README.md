@@ -45,7 +45,12 @@ extracts individual tape files from US Army AI Center `copytape` format tape ima
 
 tape blocking is not preserved.
 
+## untap.rb
+
+extracts individual tape files from `simh` format tape image container files.
+
+tape blocking is not preserved.
+
 ## unod.rb
 
-translate an octal dump (unix `od` style) back to a binary file. works with Gould GNIX (VALID SCALDstation 4BSD) `od`
-and may or may not cope with `od` output from any other system.
+translate an octal dump (unix `od` style) back to a binary file. works with Gould GNIX (VALID SCALDstation 4BSD) `od` and may or may not cope with `od` output from any other system.
